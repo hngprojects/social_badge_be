@@ -1,4 +1,4 @@
-"""add logo upload url and publid id
+"""add logo upload url and public id
 
 Revision ID: 31b19f3703d4
 Revises: 4dff2eae7a62
