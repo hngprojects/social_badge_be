@@ -11,11 +11,40 @@ from decouple import config as decouple_config
 from datetime import datetime, timezone
 
 
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+from fastapi.testclient import TestClient
+from main import app
+
 
 # Global IP generator (supports 16 million+ unique IPs)
 IP_GENERATOR = itertools.cycle(
     (f"127.{i//65536}.{(i//256)%256}.{i%256}" for i in itertools.count())
 )
+
+@pytest.fixture
+def client():
+    with TestClient(app) as c:
+        yield c
+
+
+@pytest.fixture
+def auth_headers(client):
+    response = client.post(
+        "/api/v1/auth/login",
+        json={
+            "email": "Isaacj@gmail.com",
+            "password": "45@&tuTU"
+        }
+    )
+
+    assert response.status_code == 200, response.json()
+    token = response.json()["data"]["access_token"]
+
+    return {
+        "Authorization": f"Bearer {token}"
+    }
 
 @pytest.fixture(autouse=True)
 def auto_mock_client_ip():
@@ -23,9 +52,6 @@ def auto_mock_client_ip():
     with patch("fastapi.Request.client") as mock_client:
         mock_client.host = next(IP_GENERATOR)
         yield
-
-warnings.filterwarnings("ignore", category=DeprecationWarning)
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 # Get the project root directory
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -42,7 +68,7 @@ def mock_send_email():
 def db_engine():
 
    # Create a PostgreSQL test database engine.
-    db_url = decouple_config('DB_URL')
+    db_url = decouple_config('DATABASE_URL')
 
     engine = create_engine(db_url)
     yield engine
@@ -84,141 +110,141 @@ def db_session(db_engine, apply_migrations):
 
     # Blog Model Test Fixtures
 
-    @pytest.fixture
-    def test_user(db_session):
-        """Create a test user for blog tests."""
-        from api.v1.models.user import User
+@pytest.fixture
+def test_user(db_session):
+    """Create a test user for blog tests."""
+    from api.v1.models.user import User
 
-        # Create a unique email with timestamp to avoid conflicts
-        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
-        user = User(
-            email=f"testuser_{timestamp}@example.com",
-            username=f"testuser_{timestamp}",
-            first_name="Test",
-            last_name="User",
-            is_active=True,
-            is_verified=True,
-            is_deleted=False,
-            is_superadmin=False
-        )
+    # Create a unique email with timestamp to avoid conflicts
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+    user = User(
+        email=f"testuser_{timestamp}@example.com",
+        username=f"testuser_{timestamp}",
+        first_name="Test",
+        last_name="User",
+        is_active=True,
+        is_verified=True,
+        is_deleted=False,
+        is_superadmin=False
+    )
 
-        db_session.add(user)
-        db_session.commit()
-        db_session.refresh(user)
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
 
-        yield user
+    yield user
 
-    @pytest.fixture
-    def test_blog(db_session, test_user):
-        """Create a test blog post."""
-        from api.v1.models.blog import Blog
+@pytest.fixture
+def test_blog(db_session, test_user):
+    """Create a test blog post."""
+    from api.v1.models.blog import Blog
 
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+    blog = Blog(
+        author_id=test_user.id,
+        title=f"Test Blog {timestamp}",
+        content="This is test content for the blog post.",
+        excerpt="Test excerpt",
+        tags="test,blog,indexing",
+        is_deleted=False
+    )
+
+    db_session.add(blog)
+    db_session.commit()
+    db_session.refresh(blog)
+
+    yield blog
+
+@pytest.fixture
+def test_multiple_blogs(db_session, test_user):
+    """Create multiple test blog posts for a user."""
+    from api.v1.models.blog import Blog
+
+    blogs = []
+    for i in range(5):
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
         blog = Blog(
             author_id=test_user.id,
-            title=f"Test Blog {timestamp}",
-            content="This is test content for the blog post.",
-            excerpt="Test excerpt",
-            tags="test,blog,indexing",
-            is_deleted=False
+            title=f"Test Blog {i} {timestamp}",
+            content=f"This is test content for blog post {i}.",
+            excerpt=f"Test excerpt {i}",
+            tags=f"test,blog{i},indexing",
+            is_deleted=(i % 4 == 0)  # Make some blogs "deleted" for testing
         )
 
         db_session.add(blog)
-        db_session.commit()
+        blogs.append(blog)
+
+    db_session.commit()
+
+    # Refresh all blogs to get their IDs
+    for blog in blogs:
         db_session.refresh(blog)
 
-        yield blog
+    yield blogs
 
-    @pytest.fixture
-    def test_multiple_blogs(db_session, test_user):
-        """Create multiple test blog posts for a user."""
-        from api.v1.models.blog import Blog
+@pytest.fixture
+def test_blog_like(db_session, test_user, test_blog):
+    """Create a test blog like."""
+    from api.v1.models.blog import BlogLike
 
-        blogs = []
-        for i in range(5):
-            timestamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
-            blog = Blog(
-                author_id=test_user.id,
-                title=f"Test Blog {i} {timestamp}",
-                content=f"This is test content for blog post {i}.",
-                excerpt=f"Test excerpt {i}",
-                tags=f"test,blog{i},indexing",
-                is_deleted=(i % 4 == 0)  # Make some blogs "deleted" for testing
-            )
+    like = BlogLike(
+        blog_id=test_blog.id,
+        user_id=test_user.id,
+        ip_address="127.0.0.1"
+    )
 
-            db_session.add(blog)
-            blogs.append(blog)
+    db_session.add(like)
+    db_session.commit()
+    db_session.refresh(like)
 
-        db_session.commit()
+    yield like
 
-        # Refresh all blogs to get their IDs
-        for blog in blogs:
-            db_session.refresh(blog)
+@pytest.fixture
+def test_blog_dislike(db_session, test_user, test_blog):
+    """Create a test blog dislike."""
+    from api.v1.models.blog import BlogDislike
 
-        yield blogs
+    dislike = BlogDislike(
+        blog_id=test_blog.id,
+        user_id=test_user.id,
+        ip_address="127.0.0.1"
+    )
 
-    @pytest.fixture
-    def test_blog_like(db_session, test_user, test_blog):
-        """Create a test blog like."""
-        from api.v1.models.blog import BlogLike
+    db_session.add(dislike)
+    db_session.commit()
+    db_session.refresh(dislike)
 
-        like = BlogLike(
-            blog_id=test_blog.id,
-            user_id=test_user.id,
-            ip_address="127.0.0.1"
+    yield dislike
+
+@pytest.fixture
+def test_multiple_users(db_session):
+    """Create multiple test users for advanced testing."""
+    from api.v1.models.user import User
+
+    users = []
+    for i in range(3):
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+        user = User(
+            email=f"testuser{i}_{timestamp}@example.com",
+            username=f"testuser{i}_{timestamp}",
+            first_name=f"Test{i}",
+            last_name=f"User{i}",
+            is_active=True,
+            is_verified=True,
+            is_deleted=False,
+            is_superadmin=(i == 0)  # Make one user a superadmin
         )
 
-        db_session.add(like)
-        db_session.commit()
-        db_session.refresh(like)
+        db_session.add(user)
+        users.append(user)
 
-        yield like
+    db_session.commit()
 
-    @pytest.fixture
-    def test_blog_dislike(db_session, test_user, test_blog):
-        """Create a test blog dislike."""
-        from api.v1.models.blog import BlogDislike
+    # Refresh all users to get their IDs
+    for user in users:
+        db_session.refresh(user)
 
-        dislike = BlogDislike(
-            blog_id=test_blog.id,
-            user_id=test_user.id,
-            ip_address="127.0.0.1"
-        )
+    yield users
 
-        db_session.add(dislike)
-        db_session.commit()
-        db_session.refresh(dislike)
-
-        yield dislike
-
-    @pytest.fixture
-    def test_multiple_users(db_session):
-        """Create multiple test users for advanced testing."""
-        from api.v1.models.user import User
-
-        users = []
-        for i in range(3):
-            timestamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
-            user = User(
-                email=f"testuser{i}_{timestamp}@example.com",
-                username=f"testuser{i}_{timestamp}",
-                first_name=f"Test{i}",
-                last_name=f"User{i}",
-                is_active=True,
-                is_verified=True,
-                is_deleted=False,
-                is_superadmin=(i == 0)  # Make one user a superadmin
-            )
-
-            db_session.add(user)
-            users.append(user)
-
-        db_session.commit()
-
-        # Refresh all users to get their IDs
-        for user in users:
-            db_session.refresh(user)
-
-        yield users
-
-        # No need to delete as transaction is rolled back
+    # No need to delete as transaction is rolled back

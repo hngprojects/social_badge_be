@@ -19,6 +19,7 @@ from starlette.middleware.sessions import SessionMiddleware  # required by googl
 from api.utils.json_response import JsonResponseDict
 from api.utils.logger import logger
 from api.v1.routes import api_version_one
+from api.v2.routes import api_version_two
 from api.utils.settings import settings
 from api.utils.send_logs import send_error_to_telex
 from scripts.populate_db import populate_roles_and_permissions
@@ -77,7 +78,7 @@ app.add_middleware(
 )
 
 app.include_router(api_version_one)
-
+app.include_router(api_version_two)
 
 @app.get("/", tags=["Home"])
 async def get_root(request: Request) -> dict:
