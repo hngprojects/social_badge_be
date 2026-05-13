@@ -1,68 +1,111 @@
 name: CI
 
 on:
+  push:
+    branches: [dev, staging, main]
   pull_request:
-    types: [opened, synchronize, reopened]
-    paths-ignore:
-      - "README.md"
-      # - ".github/workflows/**"
+    branches: [dev, staging, main]
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build-and-test:
+  lint:
+    name: Lint & Format
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
 
+      - name: "Set up Python"
+        uses: actions/setup-python@v6
+        with:
+          python-version-file: ".python-version"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b
+        with:
+          enable-cache: true
+
+      - name: Install the project
+        run: uv sync --dev
+
+      - name: Ruff check
+        run: uv run ruff check .
+
+      - name: Ruff format check
+        run: uv run ruff format --check .
+
+  type-check:
+    name: Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: "Set up Python"
+        uses: actions/setup-python@v6
+        with:
+          python-version-file: ".python-version"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b
+        with:
+          enable-cache: true
+
+      - name: Install the project
+        run: uv sync --dev
+
+      - name: Mypy
+        run: uv run mypy app/
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:latest
+        image: postgres:17
         env:
-          POSTGRES_USER: "username"
-          POSTGRES_PASSWORD: "password"
-          POSTGRES_DB: "test"
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test
         ports:
           - 5432:5432
-
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/test
+      REDIS_URL: redis://localhost:6379/0
+      SECRET_KEY: ci-test-secret-key-not-used-in-production
+      RESEND_API_KEY: re_dummy_api_key_for_ci
+      RESEND_FROM_EMAIL: test@example.com
+      GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+      GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - name: "Set up Python"
+        uses: actions/setup-python@v6
         with:
-          python-version: "3.10"
+          python-version-file: ".python-version"
 
-      - name: Cache dependencies
-        uses: actions/cache@v3
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b
         with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
+          enable-cache: true
 
-      - name: Install dependencies
-        run: |
-          pip install -r requirements.txt
-
-      - name: Copy env file
-        run: cp .env.sample .env
-
-      - name: Run app
-        run: |
-          python3 main.py &
-          pid=$!
-          sleep 10
-          if ps -p $pid > /dev/null; then
-            echo "main.py started successfully"
-            kill $pid
-          else
-            echo "main.py failed to start"
-            exit 1
-          fi
-
-      - name: Run migrations
-        run: |
-          alembic revision --autogenerate
-          alembic upgrade head
+      - name: Install the project
+        run: uv sync --dev
 
       - name: Run tests
-        run: |
-          PYTHONPATH=. pytest
+        run: uv run pytest
