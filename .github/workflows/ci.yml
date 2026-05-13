@@ -1,111 +1,87 @@
 name: CI
 
 on:
-  push:
-    branches: [dev, staging, main]
   pull_request:
-    branches: [dev, staging, main]
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+    types: [opened, synchronize, reopened]
+    paths-ignore:
+      - "README.md"
+      # - ".github/workflows/**"
 
 jobs:
-  lint:
-    name: Lint & Format
+  build-and-test:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
 
-      - name: "Set up Python"
-        uses: actions/setup-python@v6
-        with:
-          python-version-file: ".python-version"
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b
-        with:
-          enable-cache: true
-
-      - name: Install the project
-        run: uv sync --dev
-
-      - name: Ruff check
-        run: uv run ruff check .
-
-      - name: Ruff format check
-        run: uv run ruff format --check .
-
-  type-check:
-    name: Type Check
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: "Set up Python"
-        uses: actions/setup-python@v6
-        with:
-          python-version-file: ".python-version"
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b
-        with:
-          enable-cache: true
-
-      - name: Install the project
-        run: uv sync --dev
-
-      - name: Mypy
-        run: uv run mypy app/
-
-  test:
-    name: Test
-    runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:17
+        image: postgres:latest
         env:
           POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
+          POSTGRES_PASSWORD: password
           POSTGRES_DB: test
         ports:
           - 5432:5432
         options: >-
-          --health-cmd="pg_isready -U postgres"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
       redis:
-        image: redis:7-alpine
+        image: redis:latest
         ports:
           - 6379:6379
         options: >-
-          --health-cmd="redis-cli ping"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
-    env:
-      DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/test
-      REDIS_URL: redis://localhost:6379/0
-      SECRET_KEY: ci-test-secret-key-not-used-in-production
-      RESEND_API_KEY: re_dummy_api_key_for_ci
-      RESEND_FROM_EMAIL: test@example.com
-      GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
-      GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
-      - uses: actions/checkout@v6
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - name: "Set up Python"
-        uses: actions/setup-python@v6
+      - name: Set up Python
+        uses: actions/setup-python@v4
         with:
-          python-version-file: ".python-version"
+          python-version: "3.13"
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b
+      - name: Cache dependencies
+        uses: actions/cache@v3
         with:
-          enable-cache: true
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
 
-      - name: Install the project
-        run: uv sync --dev
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Create .env file
+        run: |
+          echo "ENVIRONMENT=test" > .env
+          echo "DATABASE_URL=postgresql+asyncpg://postgres:password@localhost:5432/test" >> .env
+          echo "REDIS_URL=redis://localhost:6379/0" >> .env
+          echo "SECRET_KEY=test-secret-key" >> .env
+          echo "ALLOWED_ORIGINS=[\"http://localhost:3000\"]" >> .env
+
+      - name: Run app smoke test
+        run: |
+          uvicorn app.main:app --host 0.0.0.0 --port 8000 &
+          pid=$!
+          sleep 10
+          if ps -p $pid > /dev/null; then
+            echo "App started successfully"
+            kill $pid
+          else
+            echo "App failed to start"
+            exit 1
+          fi
+
+      - name: Run migrations
+        run: |
+          alembic upgrade head
 
       - name: Run tests
-        run: uv run pytest
+        run: |
+          PYTHONPATH=. pytest

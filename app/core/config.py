@@ -61,6 +61,18 @@ class Settings(BaseSettings):
     GOOGLE_REDIRECT_URI: str = "http://localhost:8000/api/v1/auth/google/callback"
     GOOGLE_OAUTH_STATE_TTL_MINUTES: int = 10
 
+    # --- Redis keys ---
+    TOKEN_PREFIX: str = "verify:"  # noqa: S105
+    PASSWORD_RESET_PREFIX: str = "pwd_reset:"  # noqa: S105
+    GOOGLE_STATE_PREFIX: str = "oauth:google:state:"
+    GOOGLE_EXCHANGE_PREFIX: str = "oauth:google:exchange:"
+    BLACKLIST_PREFIX: str = "blacklist:jti:"
+
+    # --- Cloudinary ---
+    CLOUDINARY_CLOUD_NAME: str = ""
+    CLOUDINARY_API_KEY: str = ""
+    CLOUDINARY_API_SECRET: str = ""
+
     # --- Validators ---
     @field_validator("ALLOWED_ORIGINS", mode="before")
     @classmethod
