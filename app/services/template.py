@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 async def create_template_instance(
     session: AsyncSession,
-    organizer_id: UUID,
+    organiser_id: UUID,
     platform_template_id: UUID,
 ) -> OrganiserTemplate:
     """Create a new organiser template instance from a platform template.
@@ -37,7 +37,7 @@ async def create_template_instance(
         raise PlatformTemplateNotFoundError
 
     instance = OrganiserTemplate(
-        organizer_id=organizer_id,
+        organiser_id=organiser_id,
         platform_template_id=platform_template_id,
         title=platform_template.title,
         canvas_data=platform_template.canvas_data or {},
@@ -50,7 +50,7 @@ async def create_template_instance(
     logger.info(
         "Created template instance %s for organiser %s",
         instance.id,
-        organizer_id,
+        organiser_id,
     )
     return instance
 

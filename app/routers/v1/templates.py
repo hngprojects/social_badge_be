@@ -48,7 +48,7 @@ router = APIRouter()
                             "platform_template_id": (
                                 "019e1b66-c4ec-7b80-8c85-84c2fe4f9c00"
                             ),
-                            "organizer_id": "019e1b66-c4ec-7b80-8c85-84c2fe4f9c11",
+                            "organiser_id": "019e1b66-c4ec-7b80-8c85-84c2fe4f9c11",
                             "created_at": "2026-05-12T09:30:00Z",
                         },
                     }
@@ -72,7 +72,7 @@ async def create_instance(
     try:
         instance = await create_template_instance(
             session=session,
-            organizer_id=current_user.id,
+            organiser_id=current_user.id,
             platform_template_id=payload.platform_template_id,
         )
     except PlatformTemplateNotFoundError as exc:
