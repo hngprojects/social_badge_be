@@ -39,20 +39,26 @@ PLATFORM_TEMPLATES_SEED = [
 
 
 async def seed_platform_templates() -> None:
-    """Insert the four platform templates if they don't already exist."""
+    """Insert any platform templates that don't already exist (by title)."""
     async with AsyncSessionLocal() as session:
-        result = await session.execute(select(PlatformTemplate))
-        existing = result.scalars().all()
-        if existing:
-            logger.info("Platform templates already seeded (%d found).", len(existing))
+        result = await session.execute(select(PlatformTemplate.title))
+        existing_titles = set(result.scalars().all())
+
+        to_insert = [
+            data
+            for data in PLATFORM_TEMPLATES_SEED
+            if data["title"] not in existing_titles
+        ]
+        if not to_insert:
+            logger.info("All platform templates already seeded.")
             return
 
-        for data in PLATFORM_TEMPLATES_SEED:
+        for data in to_insert:
             session.add(PlatformTemplate(**data))
             await session.flush()
 
         await session.commit()
-        logger.info("Seeded %d platform templates.", len(PLATFORM_TEMPLATES_SEED))
+        logger.info("Seeded %d platform template(s).", len(to_insert))
 
 
 async def main() -> None:

@@ -4,6 +4,7 @@ from uuid import UUID
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile, status
 
 from app.core.exceptions import (
+    CloudinaryUploadError,
     NotTemplateOwnerError,
     OrganiserTemplateNotFoundError,
     PlatformTemplateNotFoundError,
@@ -302,6 +303,14 @@ async def upload_logo(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You do not have permission to modify this template instance.",
+        ) from exc
+    except CloudinaryUploadError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=(
+                "Logo upload failed. The upload service is unavailable"
+                " or rejected the file."
+            ),
         ) from exc
 
     return SuccessResponse(
