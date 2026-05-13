@@ -30,7 +30,7 @@ jobs:
           username: ${{ secrets.USERNAME }}
           password: ${{ secrets.PASSWORD }}
           source: "result.json"
-          target: "/home/${{ secrets.USERNAME }}/backend/python"
+          target: "boilerplate/python/dev"
 
       - name: Deploy to Server
         uses: appleboy/ssh-action@v0.1.8
@@ -39,5 +39,5 @@ jobs:
           username: ${{ secrets.USERNAME }}
           password: ${{ secrets.PASSWORD }}
           script: |
-            cd backend/python
+            cd boilerplate/python/dev
             python3 update_api_status.py

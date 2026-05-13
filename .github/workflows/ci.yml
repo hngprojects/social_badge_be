@@ -15,11 +15,26 @@ jobs:
       postgres:
         image: postgres:latest
         env:
-          POSTGRES_USER: "username"
-          POSTGRES_PASSWORD: "password"
-          POSTGRES_DB: "test"
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: test
         ports:
           - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:latest
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
     steps:
       - name: Checkout code
@@ -28,7 +43,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: "3.10"
+          python-version: "3.13"
 
       - name: Cache dependencies
         uses: actions/cache@v3
@@ -42,25 +57,29 @@ jobs:
         run: |
           pip install -r requirements.txt
 
-      - name: Copy env file
-        run: cp .env.sample .env
-
-      - name: Run app
+      - name: Create .env file
         run: |
-          python3 main.py &
+          echo "ENVIRONMENT=test" > .env
+          echo "DATABASE_URL=postgresql+asyncpg://postgres:password@localhost:5432/test" >> .env
+          echo "REDIS_URL=redis://localhost:6379/0" >> .env
+          echo "SECRET_KEY=test-secret-key" >> .env
+          echo "ALLOWED_ORIGINS=[\"http://localhost:3000\"]" >> .env
+
+      - name: Run app smoke test
+        run: |
+          uvicorn app.main:app --host 0.0.0.0 --port 8000 &
           pid=$!
           sleep 10
           if ps -p $pid > /dev/null; then
-            echo "main.py started successfully"
+            echo "App started successfully"
             kill $pid
           else
-            echo "main.py failed to start"
+            echo "App failed to start"
             exit 1
           fi
 
       - name: Run migrations
         run: |
-          alembic revision --autogenerate
           alembic upgrade head
 
       - name: Run tests

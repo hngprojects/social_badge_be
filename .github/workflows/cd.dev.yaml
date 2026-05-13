@@ -13,17 +13,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Archive application build
         run: |
-          mkdir app
-          cp -r alembic api qa_tests scripts tests requirements.txt *.py alembic.ini app
-          tar -czf python-dev.tar.gz app
+          tar -czf python-dev.tar.gz app/ alembic/ alembic.ini requirements.txt
+
       - name: Copy Artifacts to server
         run: |
           sshpass -p ${{ secrets.PASSWORD }} scp -o StrictHostKeyChecking=no python-dev.tar.gz ${{ secrets.USERNAME }}@${{ secrets.HOST }}:/tmp/python
           rm -f python-dev.tar.gz
+
       - name: Use SSH Action
         uses: appleboy/ssh-action@v0.1.8
         with:
@@ -36,9 +36,6 @@ jobs:
             rm -f /tmp/python/python-dev.tar.gz
             cp .env app/.env
             source venv/bin/activate
-            cd app
             pip install -r requirements.txt
-            alembic revision --autogenerate
             alembic upgrade head
-            cd ..
             pm2 restart dev-ecosystem.config.js || pm2 start dev-ecosystem.config.js
