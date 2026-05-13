@@ -46,6 +46,6 @@ register_exception_handlers(app)
 
 
 @app.get("/")
-@limiter.limit("5/minute")
+@limiter.limit("15/minute")
 def root(request: Request) -> dict[str, str]:
     return {"message": f"{settings.PROJECT_NAME} is running"}
