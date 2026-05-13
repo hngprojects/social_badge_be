@@ -1,8 +1,10 @@
-import itertools
-import sys, os
-import warnings
-from unittest.mock import patch
+from collections.abc import AsyncGenerator
+
 import pytest
+from httpx import ASGITransport, AsyncClient
+
+from app.main import app
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from alembic.command import upgrade
@@ -109,6 +111,13 @@ def db_session(db_engine, apply_migrations):
     connection.close()
 
     # Blog Model Test Fixtures
+
+@pytest.fixture
+async def client() -> AsyncGenerator[AsyncClient]:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as ac:
+        yield ac
 
 @pytest.fixture
 def test_user(db_session):
