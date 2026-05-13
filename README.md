@@ -58,6 +58,7 @@ flare-tag-be/
 │   │   └── ci.yml             # CI pipeline (lint, type-check, test)
 │   └── PULL_REQUEST_TEMPLATE.md
 ├── .env.example
+├── .pre-commit-config.yaml    # Ruff hooks for local dev
 ├── alembic.ini
 ├── pyproject.toml
 └── uv.lock
@@ -81,13 +82,21 @@ flare-tag-be/
 - **PostgreSQL**: A running instance (local, Docker, or remote).
 - **Redis**: A running instance for rate limiting.
 
-### 2. Install
+### 2a. Install
 
 ```bash
 uv sync --dev
 ```
 
 This installs both runtime and dev dependencies (`pytest`, `ruff`, `mypy`, etc.).
+
+### 2b. Set up pre-commit hooks
+
+```bash
+uv run pre-commit install
+```
+
+This installs git hooks that run `ruff check --fix` and `ruff format` on every commit.
 
 ### 3. Configure
 
